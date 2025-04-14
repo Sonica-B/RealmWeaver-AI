@@ -4,7 +4,7 @@ from collections import deque
 import logging
 
 class WaveFunctionCollapse:
-    def __init__(self, width, height, tile_types, rules):
+    def __init__(self, width, height, tile_types, rules, constraints=None):
         """
         Initialize the WFC algorithm
         
@@ -12,8 +12,7 @@ class WaveFunctionCollapse:
             width, height: Dimensions of the map
             tile_types: List of possible tile types
             rules: Dictionary mapping each tile type to allowed neighbor tiles in each direction
-                   Format: {tile_type: {direction: [allowed_neighbors]}}
-                   Directions: 'up', 'right', 'down', 'left'
+            constraints: Optional 2D array with initial constraints (None for any tile type)
         """
         self.width = width
         self.height = height
@@ -21,9 +20,41 @@ class WaveFunctionCollapse:
         self.rules = rules
         self.logger = logging.getLogger(__name__)
         
-        # Initialize grid with all possibilities
-        self.grid = [[list(tile_types) for _ in range(width)] for _ in range(height)]
-        self.collapsed = [[False for _ in range(width)] for _ in range(height)]
+        # Initialize grid with all possibilities, or apply constraints
+        self.grid = []
+        self.collapsed = []
+        
+        for y in range(height):
+            grid_row = []
+            collapsed_row = []
+            
+            for x in range(width):
+                if constraints is not None and constraints[y][x] is not None:
+                    # Apply constraint if specified
+                    allowed_tile = constraints[y][x]
+                    if isinstance(allowed_tile, str):
+                        # If string, find the index
+                        if allowed_tile in tile_types:
+                            grid_row.append([allowed_tile])
+                        else:
+                            self.logger.warning(f"Unknown tile type '{allowed_tile}' at ({x}, {y}), using all types")
+                            grid_row.append(list(tile_types))
+                    elif isinstance(allowed_tile, int):
+                        # If integer, use as index
+                        if 0 <= allowed_tile < len(tile_types):
+                            grid_row.append([tile_types[allowed_tile]])
+                        else:
+                            self.logger.warning(f"Invalid tile index {allowed_tile} at ({x}, {y}), using all types")
+                            grid_row.append(list(tile_types))
+                    else:
+                        grid_row.append(list(tile_types))
+                else:
+                    grid_row.append(list(tile_types))
+                
+                collapsed_row.append(len(grid_row[-1]) == 1)
+            
+            self.grid.append(grid_row)
+            self.collapsed.append(collapsed_row)
     
     def get_entropy(self, x, y):
         """Calculate entropy (number of possible states) for a cell"""
@@ -103,7 +134,7 @@ class WaveFunctionCollapse:
                         # Check if current tile allows this neighbor in this direction
                         if neighbor_tile in self.rules[tile][direction]:
                             # Also check if neighbor allows current tile in opposite direction
-                            if tile in self.rules[neighbor_tile][opposite_dir]:
+                            if any(tile in self.rules[neighbor_tile][opposite_dir] for tile in current_possible_tiles):
                                 allowed_neighbors.add(neighbor_tile)
                 
                 # Update possible tiles in neighbor cell
@@ -122,8 +153,18 @@ class WaveFunctionCollapse:
         
         return True
     
-    def generate(self, max_retries=5):
-        """Generate a complete map"""
+    def generate(self, max_retries=5, biome_hints=None):
+        """
+        Generate a complete map
+        
+        Args:
+            max_retries: Maximum number of retry attempts
+            biome_hints: Optional 2D array with preferred biome weights
+                         Higher values increase chance of selecting that biome
+        
+        Returns:
+            2D array of tile types or None if generation fails
+        """
         for attempt in range(max_retries):
             self.logger.info(f"Attempt {attempt+1} to generate map")
             
@@ -150,7 +191,28 @@ class WaveFunctionCollapse:
                 
                 # Collapse cell and propagate
                 x, y = min_entropy_cell
-                self.collapse_cell(x, y)
+                
+                # Apply biome hints if available
+                if biome_hints is not None:
+                    possible_tiles = self.grid[y][x]
+                    weights = []
+                    
+                    for tile in possible_tiles:
+                        tile_idx = self.tile_types.index(tile)
+                        # Apply hint weight if available, otherwise use 1.0
+                        weight = biome_hints[y][x][tile_idx] if biome_hints[y][x] is not None else 1.0
+                        weights.append(weight)
+                    
+                    # Choose tile weighted by biome hints
+                    if sum(weights) > 0:
+                        chosen_idx = random.choices(range(len(possible_tiles)), weights=weights)[0]
+                        self.grid[y][x] = [possible_tiles[chosen_idx]]
+                        self.collapsed[y][x] = True
+                    else:
+                        self.collapse_cell(x, y)
+                else:
+                    self.collapse_cell(x, y)
+                
                 propagation_success = self.propagate(x, y)
                 
                 if not propagation_success:
@@ -185,27 +247,32 @@ class WaveFunctionCollapse:
                             row.append(None)
                     map_data.append(row)
             
-            # Create color map
-            unique_tiles = list(set(tile for row in map_data for tile in row if tile is not None))
-            colors = plt.cm.tab10.colors[:len(unique_tiles)]
-            tile_to_color = {tile: colors[i] for i, tile in enumerate(unique_tiles)}
+            # Create color map for different biomes
+            biome_colors = {
+                'water': 'blue',
+                'beach': 'yellow',
+                'plains': 'lightgreen',
+                'forest': 'darkgreen',
+                'mountain': 'brown',
+                'snow': 'white'
+            }
             
-            # Create array for visualization
-            visual_data = np.zeros((self.height, self.width, 3))
-            for y in range(self.height):
-                for x in range(self.width):
-                    if map_data[y][x] is not None:
-                        visual_data[y, x] = mcolors.to_rgb(tile_to_color[map_data[y][x]])
+            # Create custom colormap
+            cmap = mcolors.ListedColormap([biome_colors.get(tile, 'gray') for tile in self.tile_types])
+            
+            # Convert map_data to numerical indices
+            tile_to_idx = {tile: i for i, tile in enumerate(self.tile_types)}
+            numerical_map = np.array([[tile_to_idx[tile] for tile in row] for row in map_data])
             
             # Plot
             plt.figure(figsize=(10, 10))
-            plt.imshow(visual_data)
+            plt.imshow(numerical_map, cmap=cmap)
             
             # Add legend
-            patches = [plt.Rectangle((0, 0), 1, 1, color=tile_to_color[tile]) for tile in unique_tiles]
-            plt.legend(patches, unique_tiles, loc='lower right')
+            patches = [plt.Rectangle((0, 0), 1, 1, color=biome_colors.get(tile, 'gray')) for tile in self.tile_types]
+            plt.legend(patches, self.tile_types, loc='lower right')
             
-            plt.title("Generated Map")
+            plt.title("Generated Biome Map")
             plt.tight_layout()
             
             if output_path:
@@ -214,7 +281,7 @@ class WaveFunctionCollapse:
             
             plt.close()
             
-            return visual_data
+            return numerical_map
             
         except ImportError:
             self.logger.warning("Matplotlib not installed. Skipping visualization.")

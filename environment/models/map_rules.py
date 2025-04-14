@@ -41,41 +41,47 @@ def create_biome_map_from_heightmap(heightmap, thresholds=None):
     return biome_map
 
 def create_tilemap_rules():
-    """Create rules for 2D tilemap generation"""
+    """Create more flexible rules for 2D tilemap generation"""
     # Define tile types
-    tile_types = ['grass', 'water', 'mountain', 'forest', 'road']
+    tile_types = ['water', 'beach', 'plains', 'forest', 'mountain', 'snow']
     
-    # Define rules for each tile type
+    # Define rules with more flexibility between adjacent biomes
     rules = {
-        'grass': {
-            'up': ['grass', 'forest', 'mountain', 'road'],
-            'right': ['grass', 'forest', 'road', 'water'],
-            'down': ['grass', 'forest', 'road', 'water'],
-            'left': ['grass', 'forest', 'mountain', 'road']
-        },
         'water': {
-            'up': ['water', 'grass'],
-            'right': ['water', 'grass'],
-            'down': ['water', 'grass'],
-            'left': ['water', 'grass']
+            'up': ['water', 'beach'], 
+            'right': ['water', 'beach'],
+            'down': ['water', 'beach'],
+            'left': ['water', 'beach']
         },
-        'mountain': {
-            'up': ['mountain', 'grass'],
-            'right': ['mountain', 'grass'],
-            'down': ['mountain', 'grass', 'forest'],
-            'left': ['mountain', 'grass']
+        'beach': {
+            'up': ['beach', 'plains', 'water'],
+            'right': ['beach', 'plains', 'water'],
+            'down': ['beach', 'plains', 'water'],
+            'left': ['beach', 'plains', 'water']
+        },
+        'plains': {
+            'up': ['plains', 'forest', 'beach', 'mountain'],
+            'right': ['plains', 'forest', 'beach', 'mountain'],
+            'down': ['plains', 'forest', 'beach', 'mountain'],
+            'left': ['plains', 'forest', 'beach', 'mountain']
         },
         'forest': {
-            'up': ['forest', 'grass', 'mountain'],
-            'right': ['forest', 'grass'],
-            'down': ['forest', 'grass'],
-            'left': ['forest', 'grass']
+            'up': ['forest', 'mountain', 'plains', 'snow'],
+            'right': ['forest', 'mountain', 'plains', 'snow'],
+            'down': ['forest', 'mountain', 'plains', 'snow'],
+            'left': ['forest', 'mountain', 'plains', 'snow']
         },
-        'road': {
-            'up': ['road', 'grass'],
-            'right': ['road', 'grass'],
-            'down': ['road', 'grass'],
-            'left': ['road', 'grass']
+        'mountain': {
+            'up': ['mountain', 'snow', 'forest', 'plains'],
+            'right': ['mountain', 'snow', 'forest', 'plains'],
+            'down': ['mountain', 'snow', 'forest', 'plains'],
+            'left': ['mountain', 'snow', 'forest', 'plains']
+        },
+        'snow': {
+            'up': ['snow', 'mountain', 'forest'],
+            'right': ['snow', 'mountain', 'forest'],
+            'down': ['snow', 'mountain', 'forest'],
+            'left': ['snow', 'mountain', 'forest']
         }
     }
     
