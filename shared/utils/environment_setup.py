@@ -7,14 +7,14 @@ def setup_environment():
     """Set up project directory structure and logging"""
     # Create directory structure
     project_dirs = [
-        "gameworldgen/environment/data",
-        "gameworldgen/environment/models",
-        "gameworldgen/environment/training",
-        "gameworldgen/environment/inference",
-        "gameworldgen/character/data",
-        "gameworldgen/character/models",
-        "gameworldgen/shared/utils",
-        "gameworldgen/outputs"
+        "environment/data",
+        "environment/models",
+        "environment/training",
+        "environment/inference",
+        "character/data",
+        "character/models",
+        "shared/utils",
+        "outputs"
     ]
     
     for directory in project_dirs:

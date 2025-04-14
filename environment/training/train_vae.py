@@ -1,101 +1,120 @@
-import sys
-import os
-import torch
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.utils.data import DataLoader
-import time
-import argparse
+#!/usr/bin/env python
+# train_vae.py - Training script for the Terrain VAE model
 
-# Add project root to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+import os
+import sys
+import argparse
+import torch
+import logging
+from pathlib import Path
+
+# Add project root to path to allow imports across modules
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from environment.models.vae import VAE
-from environment.data.terrain_dataset import SimplifiedTerrainDataset
-from shared.utils.training_pipeline import TrainingPipeline
+from environment.data.terrain_dataset import TerrainDataset
+from shared.utils.training_pipeline import TerrainVAETrainer as TrainingPipeline
 
-def vae_loss(recon_x, x, mu, log_var):
-    # Reconstruction loss
-    recon_loss = F.mse_loss(recon_x, x, reduction='sum')
-    
-    # KL divergence
-    kl_loss = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
-    
-    return recon_loss + kl_loss
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train a VAE model for terrain generation")
+    parser.add_argument("--terrain-size", type=int, default=64, help="Size of the terrain grid")
+    parser.add_argument("--latent-dim", type=int, default=64, help="Dimension of the latent space")
+    parser.add_argument("--hidden-dim", type=int, default=256, help="Dimension of hidden layers")
+    parser.add_argument("--batch-size", type=int, default=32, help="Batch size for training")
+    parser.add_argument("--num-samples", type=int, default=1000, help="Number of synthetic samples to generate")
+    parser.add_argument("--epochs", type=int, default=50, help="Number of training epochs")
+    parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
+    parser.add_argument("--save-interval", type=int, default=10, help="Save checkpoint every N epochs")
+    parser.add_argument("--output-dir", type=str, default="gameworldgen/outputs/terrain_vae", 
+                        help="Directory to save model checkpoints")
+    parser.add_argument("--visualize", action="store_true", help="Visualize results after training")
+    return parser.parse_args()
 
-class VAETrainingPipeline(TrainingPipeline):
-    def save_checkpoint(self, epoch):
-        checkpoint_path = os.path.join(self.config['output_dir'], f'vae_checkpoint_epoch_{epoch}.pth')
-        torch.save({
-            'epoch': epoch,
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-        }, checkpoint_path)
-        self.logger.info(f"Checkpoint saved at {checkpoint_path}")
+def setup_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler("gameworldgen/train_vae.log"),
+            logging.StreamHandler()
+        ]
+    )
+    return logging.getLogger(__name__)
 
-    def train(self):
-        train_dataloader = self.prepare_dataloader()
-        optimizer = optim.Adam(self.model.parameters(), lr=self.config['learning_rate'])
-        
-        self.logger.info(f"Starting training for {self.config['num_epochs']} epochs")
-        start_time = time.time()
-        
-        for epoch in range(self.config['num_epochs']):
-            self.model.train()
-            train_loss = 0
-            
-            for batch_idx, data in enumerate(train_dataloader):
-                data = data.to(self.device)
-                optimizer.zero_grad()
-                
-                recon_batch, mu, log_var = self.model(data)
-                loss = vae_loss(recon_batch, data, mu, log_var)
-                
-                loss.backward()
-                optimizer.step()
-                
-                train_loss += loss.item()
-                
-                if batch_idx % 10 == 0:
-                    self.logger.info(f'Epoch: {epoch+1}/{self.config["num_epochs"]} '
-                                    f'[{batch_idx*len(data)}/{len(train_dataloader.dataset)} '
-                                    f'({100. * batch_idx / len(train_dataloader):.0f}%)] '
-                                    f'Loss: {loss.item()/len(data):.6f}')
-            
-            avg_loss = train_loss / len(train_dataloader.dataset)
-            self.logger.info(f'====> Epoch: {epoch+1} Average loss: {avg_loss:.6f}')
-            
-            # Save checkpoint
-            if (epoch + 1) % self.config['save_interval'] == 0:
-                self.save_checkpoint(epoch + 1)
-        
-        total_time = time.time() - start_time
-        self.logger.info(f"Training completed in {total_time:.2f} seconds")
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Train VAE for terrain generation')
-    parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
-    parser.add_argument('--batch-size', type=int, default=64, help='batch size')
-    parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
-    parser.add_argument('--output-dir', type=str, default='./outputs', help='output directory')
-    args = parser.parse_args()
+def main():
+    args = parse_args()
+    logger = setup_logging()
+    logger.info(f"Starting terrain VAE training with parameters: {args}")
     
-    # Model and dataset
-    terrain_size = 64
-    input_dim = terrain_size * terrain_size
-    model = VAE(input_dim=input_dim, latent_dim=64, hidden_dim=256)
-    dataset = SimplifiedTerrainDataset(size=terrain_size, num_samples=1000)
+    # Ensure output directory exists
+    Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     
-    # Configuration
+    # Set device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logger.info(f"Using device: {device}")
+    
+    # Create model
+    input_dim = args.terrain_size * args.terrain_size
+    model = VAE(
+        input_dim=input_dim,
+        latent_dim=args.latent_dim,
+        hidden_dim=args.hidden_dim
+    )
+    model.to(device)
+    
+    # Create dataset
+    dataset = TerrainDataset(
+        size=args.terrain_size,
+        num_samples=args.num_samples
+    )
+    logger.info(f"Created dataset with {len(dataset)} samples")
+    
+    # Configure training
     config = {
         'output_dir': args.output_dir,
         'batch_size': args.batch_size,
-        'num_workers': 2,
+        'num_workers': 2 if torch.cuda.is_available() else 0,
         'learning_rate': args.lr,
         'num_epochs': args.epochs,
-        'save_interval': 5
+        'save_interval': args.save_interval,
+        'device': device
     }
     
-    # Initialize and run training
-    pipeline = VAETrainingPipeline(model, dataset, config)
-    pipeline.train()
+    # Create trainer
+    trainer = TrainingPipeline(model, dataset, config)
+    
+    # Train model
+    logger.info("Starting training...")
+    trainer.train()
+    logger.info("Training completed!")
+    
+    # Visualize results if requested
+    if args.visualize:
+        try:
+            import matplotlib.pyplot as plt
+            import numpy as np
+            
+            # Generate samples
+            model.eval()
+            with torch.no_grad():
+                z = torch.randn(5, args.latent_dim).to(device)
+                samples = model.decode(z)
+                samples = samples.view(-1, args.terrain_size, args.terrain_size).cpu().numpy()
+            
+            # Plot samples
+            fig, axes = plt.subplots(1, len(samples), figsize=(15, 3))
+            for i, sample in enumerate(samples):
+                axes[i].imshow(sample, cmap='terrain')
+                axes[i].set_title(f"Sample {i+1}")
+                axes[i].axis('off')
+            
+            plt.tight_layout()
+            plt.savefig(os.path.join(args.output_dir, "samples.png"))
+            plt.close()
+            
+            logger.info(f"Saved visualization to {os.path.join(args.output_dir, 'samples.png')}")
+        except ImportError:
+            logger.warning("Matplotlib not installed. Skipping visualization.")
+
+if __name__ == "__main__":
+    main()
