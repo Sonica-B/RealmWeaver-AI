@@ -1,3 +1,45 @@
+import numpy as np
+import logging
+from pathlib import Path
+
+def create_biome_map_from_heightmap(heightmap, thresholds=None):
+    """
+    Convert a heightmap to a biome map based on height thresholds.
+    
+    Args:
+        heightmap: 2D numpy array with height values (0.0-1.0)
+        thresholds: Dictionary of biome thresholds. If None, uses default thresholds.
+    
+    Returns:
+        2D numpy array with biome indices
+    """
+    if thresholds is None:
+        thresholds = {
+            'water': 0.3,       # Below this is water
+            'beach': 0.35,      # Below this is beach
+            'plains': 0.5,      # Below this is plains
+            'forest': 0.7,      # Below this is forest
+            'mountain': 0.85,   # Below this is mountain
+            'snow': 1.0         # Below this is snow
+        }
+    
+    biome_indices = {
+        'water': 0, 
+        'beach': 1, 
+        'plains': 2, 
+        'forest': 3, 
+        'mountain': 4, 
+        'snow': 5
+    }
+    
+    biome_map = np.zeros(heightmap.shape, dtype=np.int32)
+    
+    # Assign biomes based on height thresholds
+    for biome, threshold in reversed(list(thresholds.items())):
+        biome_map[heightmap <= threshold] = biome_indices[biome]
+    
+    return biome_map
+
 def create_tilemap_rules():
     """Create rules for 2D tilemap generation"""
     # Define tile types
@@ -46,7 +88,7 @@ if __name__ == "__main__":
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler("gameworldgen/logs.log"),
+            logging.FileHandler("logs.log"),
             logging.StreamHandler()
         ]
     )
@@ -62,11 +104,11 @@ if __name__ == "__main__":
     
     if map_data:
         # Visualize map
-        wfc.visualize(map_data, output_path="gameworldgen/outputs/generated_map.png")
+        wfc.visualize(map_data, output_path="outputs/generated_map.png")
         
         # Save map data
         import json
-        with open("gameworldgen/outputs/map_data.json", "w") as f:
+        with open("outputs/map_data.json", "w") as f:
             json.dump(map_data, f)
         
         logging.info("Map generated and saved successfully")

@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# generate_terrain.py - Generate terrain using the trained VAE model
 
 import os
 import sys
@@ -12,23 +10,23 @@ from pathlib import Path
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from gameworldgen.environment.models.vae import TerrainVAE
+from environment.models.vae import VAE as TerrainVAE
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate terrain using the trained VAE model")
     parser.add_argument("--model-path", type=str, 
-                        default="gameworldgen/outputs/terrain_vae/checkpoint-10/model.pt",
+                        default="outputs/terrain_vae/checkpoint-100/model.pt",
                         help="Path to the trained model checkpoint")
-    parser.add_argument("--terrain-size", type=int, default=64, 
+    parser.add_argument("--terrain-size", type=int, default=128, 
                         help="Size of the terrain grid")
     parser.add_argument("--latent-dim", type=int, default=64, 
                         help="Dimension of the latent space")
     parser.add_argument("--hidden-dim", type=int, default=256, 
                         help="Dimension of hidden layers")
-    parser.add_argument("--num-samples", type=int, default=5, 
+    parser.add_argument("--num-samples", type=int, default=20, 
                         help="Number of terrain samples to generate")
     parser.add_argument("--output-dir", type=str, 
-                        default="gameworldgen/outputs/generated_terrain",
+                        default="outputs/generated_terrain",
                         help="Directory to save generated terrain")
     return parser.parse_args()
 
@@ -37,7 +35,7 @@ def setup_logging():
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler("gameworldgen/generate_terrain.log"),
+            logging.FileHandler("generate_terrain.log"),
             logging.StreamHandler()
         ]
     )
