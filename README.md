@@ -1,6 +1,22 @@
 # RealmWeaver-AI - Procedural Game Asset Generator
 
-RealmWeaver-AI is a procedural 2D game asset generation framework combining generative AI models (Stable Diffusion, CVAE-GAN) and Unity integration. This repository includes scripts for generating terrain tiles, training asset synthesis models, and exporting map data for game development.
+**RealmWeaver-AI** is a procedural 2D game asset generation framework that combines the power of **generative AI** and **Unity game development**. The system automates the creation of game-ready assets such as terrain tiles, environment props, and complete biome maps, helping indie developers reduce the time and effort needed for building immersive game worlds.
+
+---
+
+## 🔧 Core Components
+
+- **Stable Diffusion**  
+  Generates top-down terrain tiles and props from text prompts conditioned on biome and style.
+
+- **CVAE-GAN (Conditional Variational Autoencoder GAN)**  
+  Learns structural features from tiles to generate diverse and coherent tilemaps.
+
+- **Wave Function Collapse Algorithm**  
+  Helps generate procedurally varied but spatially consistent biome maps.
+
+- **Unity Integration**  
+  Automates prefab generation, reads biome CSVs, and renders maps using scripted tile placement.
 
 ---
 
